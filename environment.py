@@ -254,7 +254,7 @@ class NetworkEnv(gym.Env):
             np.array([self.current_slice[4][self.vnf_idx][self.timestep - t_s]]),   # C_{i,s}(t_k)
             np.array([self.current_slice[3]]),                                      # delta_s
             np.array([self.current_slice[2]]),                                      # ht_s
-            np.array([self.timestep])                                               # t_k
+            #np.array([self.timestep])                                               # t_k
         ])
         
         return state
@@ -508,3 +508,4 @@ class NetworkEnv(gym.Env):
             mask[action] = self.is_action_valid(action)
 
         return mask
+
