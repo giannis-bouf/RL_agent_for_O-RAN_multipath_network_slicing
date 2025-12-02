@@ -11,7 +11,7 @@ from arrival import SliceReqGenerator
 import pandas as pd
 import os
 
-C_max = 2; n_DUs = 2; n_CUs = 2; Fs_max = 4
+C_max = 2; n_DUs = 8; n_CUs = 2; Fs_max = 4
 def decode_action(action_idx):
         """
         Decode an action index into the C_max x 2 matrix X(k)
@@ -96,9 +96,9 @@ else:
         cpu_du = np.zeros(shape=(n_DUs, 12), dtype=np.float32)
         cpu_cu = np.zeros(shape=(n_CUs, 12), dtype=np.float32)
         cr_cpu = np.zeros(12, dtype=np.float32)
-        accepted = np.zeros(12)
+        # accepted = np.zeros(12)
         active = np.zeros(12)
-        acc_ratio = np.zeros(12, dtype=np.float32)
+        # acc_ratio = np.zeros(12, dtype=np.float32)
 
         while not done:
             action_mask = env.get_attr("action_masks")[0]()
@@ -111,6 +111,41 @@ else:
 
             if action != 0:
                 X_k = decode_action(action)
+                replicas_per_node = np.zeros(n_DUs + n_CUs, dtype=int)
+                for p in range(C_max):
+                    if X_k[p,0] > 0:
+                        replicas_per_node[X_k[p,0]-1] = X_k[p,1]
+            
+                for t in range(round(unnormalized_state[-1]), round(unnormalized_state[-1]) + round(unnormalized_state[18])):
+                    active[t] += (round(unnormalized_state[15]) == 1)
+                    
+                    for p in range(C_max):
+                        node = X_k[p,0]
+                        if node > 0:
+                            if node <= n_DUs:
+                                cpu_du[node-1, t] += replicas_per_node[node-1]
+                            else:
+                                cpu_cu[node - n_DUs -1, t] += replicas_per_node[node-1]
+                            cr_cpu[t] += replicas_per_node[node-1]
 
             state_, reward, done, info = env.step(action)
+            if isinstance(reward, list):
+                reward = reward
+            score += reward
             state = state_
+
+        data = {
+                "Time": np.arange(12),
+                "Active": active
+        }
+
+        df = pd.DataFrame(data)
+        os.makedirs(save_dir + f"test{test}/", exist_ok=True)
+        df.to_csv(save_dir + f"test{test}/case_{episode}.csv")
+        score = score.item()
+        test_score_history.append(score)
+
+        print(f'Test episode {episode}, score {score:.1f}')
+
+    avg_test_score = np.mean(test_score_history)
+    print(f'Average test score over {test_episodes} episodes: {avg_test_score:.1f}')
