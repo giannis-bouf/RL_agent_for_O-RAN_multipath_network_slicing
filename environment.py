@@ -7,7 +7,7 @@ import copy
 
 class NetworkEnv(gym.Env):
 
-    def __init__(self, Fs_max=4, n_DUs=2, n_CUs=2, c_DU=8, c_CU=32, C_max=2,
+    def __init__(self, Fs_max=4, n_DUs=8, n_CUs=2, c_DU=128, c_CU=512, C_max=2,
                  P_cpu=3, P_start=16, theta_idle=0.4, Gamma=12,
                  H=12, Dt=1, request_rate=1, training_mode = True, dataset = 1):
         self.horizon_length = H     # Horizon equal to total number of time slots
@@ -38,7 +38,7 @@ class NetworkEnv(gym.Env):
         # self.sp_w = self.p_w * (((self.n_DUs + 1)*(self.n_CUs + 1)) ** self.C_max)    # "Split point" block
 
         # Reward function coefficients
-        self.reward_coeffs = [1,2,3]
+        self.reward_coeffs = [2,3,1]
         
         if training_mode:
             self.dataset_file = f"dataset/historic_data.pkl"
@@ -243,6 +243,13 @@ class NetworkEnv(gym.Env):
         # if self.current_slice[0] < self.Fs_max:
         #    C_s_tk = np.concatenate([C_s_tk, np.zeros(self.Fs_max - self.current_slice[0])])
 
+        """print(self.timestep - t_s)
+        print(self.timestep)
+        print(t_s)"""
+        if self.timestep - t_s > 0:
+            time_idx = self.timestep - t_s
+        else:
+            time_idx = 0
         state = np.concatenate([
             self.DU_av_capacity[self.timestep].flatten(),
             self.CU_av_capacity[self.timestep].flatten(),
@@ -251,7 +258,7 @@ class NetworkEnv(gym.Env):
             self.assigned_paths,
             np.array([self.current_slice[0]]),                                      # F_s
             np.array([self.vnf_idx]),                                               # i_k
-            np.array([self.current_slice[4][self.vnf_idx][self.timestep - t_s]]),   # C_{i,s}(t_k)
+            np.array([self.current_slice[4][self.vnf_idx][time_idx]]),              # C_{i,s}(t_k)
             np.array([self.current_slice[3]]),                                      # delta_s
             np.array([self.current_slice[2]]),                                      # ht_s
             #np.array([self.timestep])                                               # t_k
@@ -287,8 +294,9 @@ class NetworkEnv(gym.Env):
             rem = rem // ((self.n_DUs + self.n_CUs + 1) * (self.C_max + 1))
         return X
 
-    def transition(self, action):
+    def step(self, action):
         current_state =  self.get_state()
+        #self.print_state_readable(current_state)
         reward = float('-inf')
 
         # if action == 0:
@@ -307,7 +315,7 @@ class NetworkEnv(gym.Env):
             replicas_per_node = np.zeros((self.n_DUs+self.n_CUs), dtype=int)
             for p in range(self.C_max):
                 if X_k[p,0] > 0:
-                    replicas_per_node[X_k[p,0] - 1] += X_k[p,1]
+                    replicas_per_node[X_k[p,0] - 1] = X_k[p,1]
 
             # deployment_in_RC = any(P_k[p][1] > 0 for p in range(self.C_max))
             # min/max utilization across all nodes
@@ -378,6 +386,7 @@ class NetworkEnv(gym.Env):
                 for p in range(self.C_max):
                     delay = 0
                     assigned_du = self.assigned_paths[2*p]
+                    #print(assigned_du)
                     if assigned_du > 0:
                         delay += self.FH_latency[assigned_du-1]
                         assigned_cu = X_k[p,0]-self.n_DUs
@@ -423,17 +432,37 @@ class NetworkEnv(gym.Env):
                 # self.CU_uptime = np.maximum(self.CU_uptime - dt, 0)
 
         next_state = self.get_state()
+        #self.print_state_readable(next_state)
 
         return next_state, reward, terminated, False, self.get_info()
     
     def is_action_valid(self, action):
-        if action % 1000000 == 0:
-            print("Action is: ", action)
+        #if action % 1000000 == 0:
+            #rint("Action is: ", action)
+        # In this framework, we assume a_k != 0
+        if action == 0:
+            return False
 
         # Decode action f(a_k)
         X_k = self.decode_action(action)
+        replicas_per_node = np.zeros((self.n_DUs+self.n_CUs), dtype=int)
+        for p in range(self.C_max):
+            if X_k[p,0] > 0:
+                replicas_per_node[X_k[p,0] - 1] = X_k[p,1]
+
+        # If the total computational demand is greater that the available capacity -> Invalid action
+        for node in range(self.n_DUs+self.n_CUs):
+            if (node+1 > self.n_DUs and replicas_per_node[node] > self.CU_av_capacity[self.timestep][node-self.n_DUs][0]):
+                return False
+            elif (node+1 <= self.n_DUs and replicas_per_node[node] > self.DU_av_capacity[self.timestep][node][0]):
+                return False
 
         for p in range(self.C_max):
+            # For every path with assignment in a shared node, the assigned replicas must be the same
+            for p2 in range(p+1, self.C_max):
+                if X_k[p,0] == X_k[p2,0] and X_k[p,1] != X_k[p2,1]:
+                    return False
+                
             # For an assigned node
             if X_k[p,0] > 0:
                 # If no replicas are assigned -> Invalid action
@@ -441,13 +470,6 @@ class NetworkEnv(gym.Env):
                     return False
                 # If the corresponding path is inactive and the current VNF is not f_{1,s} -> Invalid action
                 if self.assigned_paths[2*p] == 0 and self.vnf_idx > 1:
-                    return False
-                
-                # If the total computational demand is greater that the available capacity -> Invalid action
-                total_demand = sum(X_k[p2,1] for p2 in range(self.C_max) if X_k[p2,0] == X_k[p,0]) * self.CPU_per_instance[self.vnf_idx]
-                if (X_k[p,0] > self.n_DUs and total_demand > self.CU_av_capacity[self.timestep][X_k[p,0]-self.n_DUs-1][0]):
-                    return False
-                elif (X_k[p,0] <= self.n_DUs and total_demand > self.DU_av_capacity[self.timestep][X_k[p,0]-1][0]):
                     return False
             # For an unassigned node
             else:
@@ -490,22 +512,90 @@ class NetworkEnv(gym.Env):
         # if the allocated replicas exceed the maximum number of replicas per VNF
         # -> Invalid action
         required_replicas = self.current_slice[4][self.vnf_idx][self.timestep - self.current_slice[1]]
-        deployed_replicas = sum(X_k[p2,1] for p2 in range(self.C_max))
+        deployed_replicas = sum(replicas_per_node)
         if self.C_max < deployed_replicas or required_replicas > deployed_replicas:
             return False
         
-        print(f"\nValid action: {action}")
-        print("X_k =", X_k)
+        #print(f"\nValid action: {action}")
+        #print("X_k =", X_k)
 
         return True
 
     def invalid_action_masking(self):
-        mask = np.array([None] * self.action_space_dim)
-        print("Starting masking!")
-        print(self.action_space_dim)
+        mask = np.zeros(self.action_space_dim, dtype=bool)
+        #print("Starting masking!")
+        #print(self.action_space_dim)
         
         for action in range(self.action_space_dim):
             mask[action] = self.is_action_valid(action)
 
         return mask
+    
+    def print_state_readable(self, state):
+        idx = 0
+        print("\n===== CURRENT STATE =====")
+        
+        # DU capacities
+        print("DU available capacity:")
+        for du in range(self.n_DUs):
+            print(f"  DU {du}: {state[idx]}")
+            idx += 1
 
+        # CU capacities
+        print("CU available capacity:")
+        for cu in range(self.n_CUs):
+            print(f"  CU {cu}: {state[idx]}")
+            idx += 1
+
+        # Assigned paths
+        print("Assigned paths (DU, CU) per path:")
+        for p in range(self.C_max):
+            du_assigned = state[idx]
+            idx += 1
+            cu_assigned = state[idx]
+            idx += 1
+            print(f"  Path {p}: DU {du_assigned}, CU {cu_assigned}")
+
+        # Slice info
+        print(f"Slice size F_s: {state[idx]}")
+        idx += 1
+        print(f"Current VNF index vnf_idx: {state[idx]}")
+        idx += 1
+        print(f"Required replicas for this VNF: {state[idx]}")
+        idx += 1
+        print(f"SLA latency delta_s: {state[idx]}")
+        idx += 1
+        print(f"Slice duration ht_s: {state[idx]}")
+        #idx += 1
+        #print(f"Timestep t_k: {state[idx]}")
+        print("=========================\n")
+
+if __name__ == "__main__":
+    env = NetworkEnv()
+    
+    # Initial state
+    state, _ = env.reset()
+    env.print_state_readable(state)
+    
+    # Compute valid actions
+    mask = env.invalid_action_masking()
+    print("Number of valid actions:", np.sum(mask))
+    
+    for _ in range(5):
+        # Take a valid action
+        valid_actions = np.where(mask)[0]
+        if len(valid_actions) == 0:
+            print("No valid actions available!")
+        else:
+            action = np.random.choice(valid_actions)
+            print(f"\nSelected valid action: {action}")
+        print(f"\nApplying action {action}...\n")
+        
+        next_state, reward, terminated, _, info = env.step(action)
+        
+        print("Reward received:", reward)
+        env.print_state_readable(next_state)
+        
+        # Compute new valid actions
+        mask = env.invalid_action_masking()
+        print("Number of valid actions after transition:", np.sum(mask))
