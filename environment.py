@@ -113,9 +113,10 @@ class NetworkEnv(gym.Env):
               1 <= C_{i,s}(t_k) <= C_max, size: 1
               25 <= delta_s <= 100, size: 1
               0 <= ht_s <= H/2, size: 1 
+              0 <= t_k <= H-1, size: 1
         """
         #state_space_dim = self.n_DUs + self.n_CUs + self.Fs_max + 3
-        state_space_dim = self.n_DUs + self.n_CUs + (2*self.C_max) + 5
+        state_space_dim = self.n_DUs + self.n_CUs + (2*self.C_max) + 6
         lower_bds = []
         upper_bds = []
 
@@ -150,6 +151,9 @@ class NetworkEnv(gym.Env):
 
         lower_bds += [0] #ht_s
         upper_bds += [int(self.horizon_length/2 - 1)]
+
+        lower_bds += [0] #t_k
+        upper_bds += [self.horizon_length - 1]
 
         lower_bds = np.array(lower_bds)
         upper_bds = np.array(upper_bds)
@@ -261,7 +265,7 @@ class NetworkEnv(gym.Env):
             np.array([self.current_slice[4][self.vnf_idx][time_idx]]),              # C_{i,s}(t_k)
             np.array([self.current_slice[3]]),                                      # delta_s
             np.array([self.current_slice[2]]),                                      # ht_s
-            #np.array([self.timestep])                                               # t_k
+            np.array([self.timestep])                                               # t_k
         ])
         
         return state
@@ -325,7 +329,7 @@ class NetworkEnv(gym.Env):
             for t in range(self.current_slice[1] + self.current_slice[2] - self.timestep):
                 for du in range(self.n_DUs):
                     # If t = t_0 or node idle in t-1: cold start overhead may be needed
-                    prev_phi = 0 if self.timestep + t == 0 else self.DU_phi[self.timestep + t - 1][du][0]
+                    prev_phi = self.DU_phi[self.timestep + t][du][0] if self.timestep + t == 0 else self.DU_phi[self.timestep + t - 1][du][0]
                     cold_start = (prev_phi == 0)
 
                     #for k in range(self.current_slice[0]-1):
@@ -337,6 +341,7 @@ class NetworkEnv(gym.Env):
                     # If cold start was considered and node is active now: apply cold start overhead
                     if self.DU_phi[self.timestep + t][du][0] > 0 and cold_start:
                         self.DU_phi[self.timestep + t][du][0] += self.P_start
+                        #print(f"DU {du+1} cold start applied!")
 
                     # u^i_{node}(t) = 1 - (AC_i(t)/c_i)
                     self.DU_utilization[self.timestep + t][du][0] = 1 - (self.DU_av_capacity[self.timestep + t][du][0] / self.c_DU)
@@ -350,7 +355,7 @@ class NetworkEnv(gym.Env):
 
                 # We act accordingly for CUs
                 for cu in range(self.n_CUs):
-                    prev_phi = 0 if self.timestep + t == 0 else self.CU_phi[self.timestep + t - 1][cu][0]
+                    prev_phi = self.CU_phi[self.timestep + t][cu][0] if self.timestep + t == 0 else self.CU_phi[self.timestep + t - 1][cu][0]
                     cold_start = (prev_phi == 0)
                     # During computing CU power consumption, we have to take into consideration their distributed workload
                     E_lambda = (self.theta_idle + self.llambda[cu] * (1-self.theta_idle)) * self.rho_lambda[cu]
@@ -361,6 +366,7 @@ class NetworkEnv(gym.Env):
 
                     if self.CU_phi[self.timestep + t][cu][0] > 0 and cold_start:
                         self.CU_phi[self.timestep + t][cu][0] += self.P_start
+                        #print(f"CU {cu+1} cold start applied!")
                     
                     self.CU_utilization[self.timestep + t][cu][0] = 1 - (self.CU_av_capacity[self.timestep + t][cu][0] / self.c_CU)
                     max_util = np.maximum(max_util, self.CU_utilization[self.timestep + t][cu][0])
@@ -393,10 +399,11 @@ class NetworkEnv(gym.Env):
                         if assigned_cu > 0:
                             delay += self.BH_latency[assigned_du-1, assigned_cu-1]
                     max_delay = np.maximum(max_delay, delay)
-                
+                #print(f"Max delay for slice at time {self.timestep}: {max_delay} ms")
                 # If SLA violation occurs, apply proportionate penalty
                 if max_delay > self.current_slice[3]:
                     reward -= self.reward_coeffs[2] * (max_delay - self.current_slice[3]) * self.Gamma
+                    #print(f"SLA violation! Delay: {max_delay} ms, SLA: {self.current_slice[3]} ms")
 
         self.scenario_reward += reward
         terminated = False
@@ -530,72 +537,3 @@ class NetworkEnv(gym.Env):
             mask[action] = self.is_action_valid(action)
 
         return mask
-    
-    def print_state_readable(self, state):
-        idx = 0
-        print("\n===== CURRENT STATE =====")
-        
-        # DU capacities
-        print("DU available capacity:")
-        for du in range(self.n_DUs):
-            print(f"  DU {du}: {state[idx]}")
-            idx += 1
-
-        # CU capacities
-        print("CU available capacity:")
-        for cu in range(self.n_CUs):
-            print(f"  CU {cu}: {state[idx]}")
-            idx += 1
-
-        # Assigned paths
-        print("Assigned paths (DU, CU) per path:")
-        for p in range(self.C_max):
-            du_assigned = state[idx]
-            idx += 1
-            cu_assigned = state[idx]
-            idx += 1
-            print(f"  Path {p}: DU {du_assigned}, CU {cu_assigned}")
-
-        # Slice info
-        print(f"Slice size F_s: {state[idx]}")
-        idx += 1
-        print(f"Current VNF index vnf_idx: {state[idx]}")
-        idx += 1
-        print(f"Required replicas for this VNF: {state[idx]}")
-        idx += 1
-        print(f"SLA latency delta_s: {state[idx]}")
-        idx += 1
-        print(f"Slice duration ht_s: {state[idx]}")
-        #idx += 1
-        #print(f"Timestep t_k: {state[idx]}")
-        print("=========================\n")
-
-if __name__ == "__main__":
-    env = NetworkEnv()
-    
-    # Initial state
-    state, _ = env.reset()
-    env.print_state_readable(state)
-    
-    # Compute valid actions
-    mask = env.invalid_action_masking()
-    print("Number of valid actions:", np.sum(mask))
-    
-    for _ in range(5):
-        # Take a valid action
-        valid_actions = np.where(mask)[0]
-        if len(valid_actions) == 0:
-            print("No valid actions available!")
-        else:
-            action = np.random.choice(valid_actions)
-            print(f"\nSelected valid action: {action}")
-        print(f"\nApplying action {action}...\n")
-        
-        next_state, reward, terminated, _, info = env.step(action)
-        
-        print("Reward received:", reward)
-        env.print_state_readable(next_state)
-        
-        # Compute new valid actions
-        mask = env.invalid_action_masking()
-        print("Number of valid actions after transition:", np.sum(mask))
