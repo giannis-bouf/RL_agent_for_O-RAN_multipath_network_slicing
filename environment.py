@@ -38,13 +38,13 @@ class NetworkEnv(gym.Env):
         # self.sp_w = self.p_w * (((self.n_DUs + 1)*(self.n_CUs + 1)) ** self.C_max)    # "Split point" block
 
         # Reward function coefficients
-        self.reward_coeffs = [2,3,1]
+        self.reward_coeffs = [1,4,1]
         
         if training_mode:
-            self.dataset_file = f"dataset/historic_data.pkl"
+            self.dataset_file = f"datasets/dataset{dataset}/historic_data.pkl"
             self.total_episodes = 1000
         else:
-            self.dataset_file = f"dataset/test_data.pkl"
+            self.dataset_file = f"datasets/dataset{dataset}/test_data.pkl"
             self.total_episodes = 10
 
         with open(self.dataset_file, "rb") as f:
