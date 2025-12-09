@@ -11,7 +11,7 @@ from arrival import SliceReqGenerator
 import pandas as pd
 import os
 
-C_max = 2; n_DUs = 8; n_CUs = 2; Fs_max = 4; du_capacity = 128; cu_capacity = 512
+C_max = 2; n_DUs = 8; n_CUs = 2; Fs_max = 4; du_capacity = 16; cu_capacity = 64
 P_cpu=3; P_start=16; theta_idle=0.4
 
 def decode_action(action_idx):
@@ -76,7 +76,6 @@ os.makedirs(save_dir, exist_ok=True)
 
 if training:
     env = VecNormalize(env, norm_obs=True, norm_reward=True, clip_obs=10.0)
-    #model = MaskablePPO("MlpPolicy", env, gamma=0.99, verbose=2, tensorboard_log="./ppo_tensorboard/", seed=12)
     model = MaskablePPO("MlpPolicy", env, gamma=0.99, verbose=2, tensorboard_log=None, seed=12)
 
     model.learn(total_timesteps=100_000, progress_bar=True)
@@ -121,9 +120,6 @@ else:
             action, _ = model.predict(state, action_masks=action_mask, deterministic=True)
 
             unnormalized_state = env.unnormalize_obs(state).flatten()
-            # print("State length:", len(unnormalized_state))
-            # for i, v in enumerate(unnormalized_state):
-                # print(i, v)
 
             # If a VNF is being deployed
             if action != 0:
@@ -144,7 +140,7 @@ else:
                             if node <= n_DUs:
                                 cpu_du[node-1, t] += replicas_per_node[node-1]
                             else:
-                                cpu_cu[node- n_DUs-1, t] += replicas_per_node[node-1]
+                                cpu_cu[node-n_DUs-1, t] += replicas_per_node[node-1]
                     
                 # If the last VNF is being placed, check for SLA violations
                 if round(unnormalized_state[-5]) == round(unnormalized_state[-6])-1:
