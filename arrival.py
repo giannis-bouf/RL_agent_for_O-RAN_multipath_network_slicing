@@ -101,7 +101,7 @@ class SliceReqGenerator:
                 for t in T_rec_s:
                     self.configurations[t_s + t] += 1
 
-            self.arriving_reqs.append([F_s, t_s, ht_s, delta_s, C_s, sorted(T_rec_s)])
+            self.arriving_reqs.append([F_s, t_s, ht_s, delta_s, C_s])
 
 def load():
     with open('datasets/dataset2/historic_data.pkl', 'rb') as f:
@@ -134,3 +134,4 @@ if __name__ == '__main__':
        pickle.dump(test_episodes, f)
 
     load()
+
