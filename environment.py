@@ -7,7 +7,7 @@ import copy
 
 class NetworkEnv(gym.Env):
 
-    def __init__(self, Fs_max=4, n_DUs=8, n_CUs=2, c_DU=128, c_CU=512, C_max=2,
+    def __init__(self, Fs_max=4, n_DUs=8, n_CUs=2, c_DU=16, c_CU=64, C_max=2,
                  P_cpu=3, P_start=16, theta_idle=0.4, Gamma=12,
                  H=12, Dt=1, request_rate=1, training_mode = True, dataset = 1):
         self.horizon_length = H     # Horizon equal to total number of time slots
@@ -32,13 +32,8 @@ class NetworkEnv(gym.Env):
         self.BH_latency = np.random.uniform(12, 40, size=(self.n_DUs, self.n_CUs)).astype(int)
         self.Gamma = Gamma                              # "Severity of delay violations" constant
 
-        # Weights in f(a_k)-action encoding function per block
-        # self.cu_w = (self.C_max + 1)**(self.n_DUs*(self.Fs_max-1))                    # "Allocation in CUs - X^{CU}" block
-        # self.p_w  = self.cu_w * ((self.C_max + 1)**(self.n_CUs*(self.Fs_max-1)))      # "Path" block
-        # self.sp_w = self.p_w * (((self.n_DUs + 1)*(self.n_CUs + 1)) ** self.C_max)    # "Split point" block
-
         # Reward function coefficients
-        self.reward_coeffs = [1,4,1]
+        self.reward_coeffs = [1,0,0]
         
         if training_mode:
             self.dataset_file = f"datasets/dataset{dataset}/historic_data.pkl"
@@ -69,10 +64,6 @@ class NetworkEnv(gym.Env):
         self.DU_av_capacity = np.full(shape=(self.horizon_length, self.n_DUs, 1), fill_value=self.c_DU, dtype=int)
         self.CU_av_capacity = np.full(shape=(self.horizon_length, self.n_CUs, 1), fill_value=self.c_CU, dtype=int)
 
-        # Remaining uptime per DU/CU
-        # self.DU_uptime = np.zeros(shape=(self.n_DUs, 1), dtype=np.float64)
-        # self.CU_uptime = np.zeros(shape=(self.n_CUs, 1), dtype=np.float64) 
-
         # Node computational utilization as function of time
         self.DU_utilization = np.full(shape=(self.horizon_length, self.n_DUs, 1), fill_value=0, dtype=np.float64)
         self.CU_utilization = np.full(shape=(self.horizon_length, self.n_CUs, 1), fill_value=0, dtype=np.float64)
@@ -93,7 +84,6 @@ class NetworkEnv(gym.Env):
         
         """
         State s_k = <AC_k=[AC_1(k), ..., AC_{|E|+|C|}(k)],
-                     #### AT_k=[AT_1(k), ..., AT_{|E|+|C|}(k)], 
                      P_k = [P_1(k)_DU, P_1(k)_CU, ..., P_C_max(k)_DU, P_C_max(k)_CU]
                      SI_k=[F_s, i_k, C_{i,s}(t_k), delta_s, ht_s], 
                      t_k>
@@ -102,8 +92,6 @@ class NetworkEnv(gym.Env):
             - AC_k.size = n_DUs + n_CUs
               0 <= AC_i <= c_DU, if i = DU
               0 <= AC_i <= c_CU, if i = CU
-            ###- AT_k.size = n_DUs + n_CUs
-            ###  0 <= AT_i <= H-1
             - P_k.size = 2*C_max
               0 <= P_i(k)_DU <= n_DUs
               0 <= P_i(k)_CU <= n_CUs
@@ -115,18 +103,13 @@ class NetworkEnv(gym.Env):
               0 <= ht_s <= H/2, size: 1 
               0 <= t_k <= H-1, size: 1
         """
-        #state_space_dim = self.n_DUs + self.n_CUs + self.Fs_max + 3
         state_space_dim = self.n_DUs + self.n_CUs + (2*self.C_max) + 6
         lower_bds = []
         upper_bds = []
 
         # AC_k
         lower_bds += [0] * (self.n_DUs + self.n_CUs)
-        upper_bds += [self.c_DU]*self.n_DUs + [self.c_CU]*self.n_CUs 
-
-        # AT_k
-        # lower_bds += [0] * (self.n_DUs + self.n_CUs)
-        # upper_bds += [self.horizon_length - 1] * (self.n_DUs + self.n_CUs)
+        upper_bds += [self.c_DU]*self.n_DUs + [self.c_CU]*self.n_CUs
 
         # P_k
         for _ in range(self.C_max):
@@ -143,9 +126,6 @@ class NetworkEnv(gym.Env):
         lower_bds += [1] #C_{i,s}(t_k)
         upper_bds += [self.C_max]
 
-        #lower_bds += [1]*3 + [0]*(self.Fs_max-3) #C_s(t_k)
-        #upper_bds += [1] + [self.C_max]*(self.Fs_max-1)
-
         lower_bds += [25] #delta_s
         upper_bds += [100]
 
@@ -161,23 +141,7 @@ class NetworkEnv(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=lower_bds, high=upper_bds, shape=(state_space_dim,), dtype=np.float64
         )
-
         """
-        Action a_k = <X^{DU}(k), X^{CU}(k), P(k)>
-
-        - X^{DU}(k)
-          n_DUs x (Fs_max-1) entries, 0 <= X^{DU}_{i,j} <= C_max
-          size: (C_max + 1)^(n_DUs * (Fs_max-1))
-        - X^{CU}(k)
-          n_CUs x (Fs_max-1) entries, 0 <= X^{CU}_{i,j} <= C_max
-          size: (C_max + 1)^(n_CUs * (Fs_max-1))
-        - P(k)
-          C_max rows
-          each row: (n_DUs + 1)*(n_CUs + 1) combinations
-          size: ((n_DUs + 1)*(n_CUs + 1))^C_max
-        """
-        """
-        NEW
         Action a_k = X(k)
         - X(k)
           C_max rows, for each row p:
@@ -186,8 +150,6 @@ class NetworkEnv(gym.Env):
             domain's size = ((n_DUs + n_CUs+1)(C_max+1))^C_max
           
         """
-        #self.action_space_dim = ((self.C_max + 1) ** ((self.n_DUs + self.n_CUs) * (self.Fs_max-1))) \
-        #                        * (((self.n_DUs + 1)*(self.n_CUs + 1)) ** self.C_max)
         self.action_space_dim = ((self.n_DUs + self.n_CUs + 1)*(self.C_max + 1)) ** self.C_max
         self.action_space = gym.spaces.Discrete(self.action_space_dim)
 
@@ -215,10 +177,6 @@ class NetworkEnv(gym.Env):
         self.DU_av_capacity = np.full(shape=(self.horizon_length, self.n_DUs, 1), fill_value=self.c_DU, dtype=int)
         self.CU_av_capacity = np.full(shape=(self.horizon_length, self.n_CUs, 1), fill_value=self.c_CU, dtype=int)
 
-        # Remaining uptime per DU/CU
-        # self.DU_uptime = np.zeros(shape=(self.n_DUs, 1), dtype=np.float64)
-        # self.CU_uptime = np.zeros(shape=(self.n_CUs, 1), dtype=np.float64) 
-
         # Node computational utilization as function of time
         self.DU_utilization = np.full(shape=(self.horizon_length, self.n_DUs, 1), fill_value=0, dtype=np.float64)
         self.CU_utilization = np.full(shape=(self.horizon_length, self.n_CUs, 1), fill_value=0, dtype=np.float64)
@@ -241,15 +199,7 @@ class NetworkEnv(gym.Env):
     
     def get_state(self):
         t_s = self.current_slice[1]
-        # C_s_tk = np.array([self.current_slice[4][k][self.timestep - t_s] for k in range(self.current_slice[0])])
 
-        # Padding with 0 if F_s < F_s_max
-        # if self.current_slice[0] < self.Fs_max:
-        #    C_s_tk = np.concatenate([C_s_tk, np.zeros(self.Fs_max - self.current_slice[0])])
-
-        """print(self.timestep - t_s)
-        print(self.timestep)
-        print(t_s)"""
         if self.timestep - t_s > 0:
             time_idx = self.timestep - t_s
         else:
@@ -257,8 +207,6 @@ class NetworkEnv(gym.Env):
         state = np.concatenate([
             self.DU_av_capacity[self.timestep].flatten(),
             self.CU_av_capacity[self.timestep].flatten(),
-            # self.DU_uptime[self.timestep].flatten(),
-            # self.CU_uptime[self.timestep].flatten(),
             self.assigned_paths,
             np.array([self.current_slice[0]]),                                      # F_s
             np.array([self.vnf_idx]),                                               # i_k
@@ -321,7 +269,6 @@ class NetworkEnv(gym.Env):
                 if X_k[p,0] > 0:
                     replicas_per_node[X_k[p,0] - 1] = X_k[p,1]
 
-            # deployment_in_RC = any(P_k[p][1] > 0 for p in range(self.C_max))
             # min/max utilization across all nodes
             max_util = 0; min_util = np.inf
 
@@ -332,7 +279,6 @@ class NetworkEnv(gym.Env):
                     prev_phi = self.DU_phi[self.timestep + t][du][0] if self.timestep + t == 0 else self.DU_phi[self.timestep + t - 1][du][0]
                     cold_start = (prev_phi == 0)
 
-                    #for k in range(self.current_slice[0]-1):
                     # Reduce the available resources according to the demand of each VNF on each node
                     self.DU_av_capacity[self.timestep + t][du][0] -= replicas_per_node[du] * self.CPU_per_instance[self.vnf_idx]
                     # Increase the power consumption of this node accordingly
@@ -347,11 +293,6 @@ class NetworkEnv(gym.Env):
                     self.DU_utilization[self.timestep + t][du][0] = 1 - (self.DU_av_capacity[self.timestep + t][du][0] / self.c_DU)
                     max_util = np.maximum(max_util, self.DU_utilization[self.timestep + t][du][0])
                     min_util = np.minimum(min_util, self.DU_utilization[self.timestep + t][du][0])
-                    
-                    # DU is active <=> VNF 1 is deployed there. We update the remaining up time accordingly
-                    # if X_DU_k[du][0] > 0 and \
-                    #   (self.current_slice[2]-(self.timestep - self.current_slice[1])) > self.DU_uptime[du][0]:
-                    #    self.DU_uptime[du][0] = self.current_slice[2]-(self.timestep - self.current_slice[1])
 
                 # We act accordingly for CUs
                 for cu in range(self.n_CUs):
@@ -371,10 +312,6 @@ class NetworkEnv(gym.Env):
                     self.CU_utilization[self.timestep + t][cu][0] = 1 - (self.CU_av_capacity[self.timestep + t][cu][0] / self.c_CU)
                     max_util = np.maximum(max_util, self.CU_utilization[self.timestep + t][cu][0])
                     min_util = np.minimum(min_util, self.CU_utilization[self.timestep + t][cu][0])
-                    
-                    # if X_CU_k[cu][self.current_slice[0]-1-1] > 0 and \
-                    #    (self.current_slice[2]-(self.timestep - self.current_slice[1])) > self.CU_uptime[cu][0]:
-                    #    self.CU_uptime[cu][0] = self.current_slice[2]-(self.timestep - self.current_slice[1])
 
             # Power consumption for each moment in current timestep
             for du in range(self.n_DUs):
@@ -435,8 +372,6 @@ class NetworkEnv(gym.Env):
                 self.current_slice = self.current_scenario[self.timestep].pop()
                 self.assigned_paths = np.full(self.C_max*2, fill_value=0, dtype=int)
                 self.vnf_idx = 1
-                # self.DU_uptime = np.maximum(self.DU_uptime - dt, 0)
-                # self.CU_uptime = np.maximum(self.CU_uptime - dt, 0)
 
         next_state = self.get_state()
         #self.print_state_readable(next_state)
@@ -444,8 +379,6 @@ class NetworkEnv(gym.Env):
         return next_state, reward, terminated, False, self.get_info()
     
     def is_action_valid(self, action):
-        #if action % 1000000 == 0:
-            #rint("Action is: ", action)
         # In this framework, we assume a_k != 0
         if action == 0:
             return False
@@ -530,8 +463,6 @@ class NetworkEnv(gym.Env):
 
     def invalid_action_masking(self):
         mask = np.zeros(self.action_space_dim, dtype=bool)
-        #print("Starting masking!")
-        #print(self.action_space_dim)
         
         for action in range(self.action_space_dim):
             mask[action] = self.is_action_valid(action)
