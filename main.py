@@ -45,7 +45,6 @@ def unwrap_env(wrapped_env):
 
     return env
 
-
 parser = argparse.ArgumentParser(description="CLI")
 
 parser.add_argument("--training", action="store_true", help="Enable training mode")
@@ -105,6 +104,7 @@ else:
 
     test_score_history = []
     state = env.reset()
+
     for episode in range(test_episodes):
         done = False
         score = 0
@@ -134,13 +134,11 @@ else:
                 for t in range(round(unnormalized_state[-1]), round(unnormalized_state[-1]) + round(unnormalized_state[-2])):
                     active[t] += (round(unnormalized_state[15]) == 1)
                     
-                    for p in range(C_max):
-                        node = X_k[p,0]
-                        if node > 0:
-                            if node <= n_DUs:
-                                cpu_du[node-1, t] += replicas_per_node[node-1]
-                            else:
-                                cpu_cu[node-n_DUs-1, t] += replicas_per_node[node-1]
+                    for node in range(n_DUs + n_CUs):
+                        if node < n_DUs:
+                            cpu_du[node, t] += replicas_per_node[node]
+                        else:
+                            cpu_cu[node-n_DUs, t] += replicas_per_node[node]
                     
                 # If the last VNF is being placed, check for SLA violations
                 if round(unnormalized_state[-5]) == round(unnormalized_state[-6])-1:
