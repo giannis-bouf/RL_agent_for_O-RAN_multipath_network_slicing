@@ -198,7 +198,7 @@ else:
                 "Power_Consumption": power_cons,
                 "Max_Load_Imbalance": max_load - min_load,
                 "SLA_Violations": sla_violations,
-                "SLA_Severity": sla_severity
+                "SLA_Severity": sla_severity / np.maximum(sla_violations, 1)
         }
 
         df = pd.DataFrame(data)
@@ -236,3 +236,4 @@ else:
 
     avg_test_score = np.mean(test_score_history)
     print(f'Average test score over {test_episodes} episodes: {avg_test_score:.1f}')
+
