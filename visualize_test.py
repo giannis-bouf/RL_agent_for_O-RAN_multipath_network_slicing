@@ -50,7 +50,7 @@ plt.grid(True)
 plt.tight_layout()
 plt.show()
 
-# Plot: Load Imbalance
+# Plot Load Imbalance
 plt.figure(figsize=(10, 5))
 plt.plot(time, A["Max_Load_Imbalance"], label=f"{agent_orientations[agentA]} Agent")
 plt.plot(time, B["Max_Load_Imbalance"], label=f"{agent_orientations[agentB]} Agent")
@@ -62,7 +62,7 @@ plt.grid(True)
 plt.tight_layout()
 plt.show()
 
-# Plot: SLA Violations
+# Plot SLA Violations
 plt.figure(figsize=(10, 5))
 plt.plot(time, A["SLA_Violations"], label=f"{agent_orientations[agentA]} Agent")
 plt.plot(time, B["SLA_Violations"], label=f"{agent_orientations[agentB]} Agent")
@@ -74,7 +74,7 @@ plt.grid(True)
 plt.tight_layout()
 plt.show()
 
-# Plot: SLA Severity
+# Plot SLA Severity
 plt.figure(figsize=(10, 5))
 plt.plot(time, A["SLA_Severity"], label=f"{agent_orientations[agentA]} Agent")
 plt.plot(time, B["SLA_Severity"], label=f"{agent_orientations[agentB]} Agent")
@@ -86,3 +86,4 @@ plt.grid(True)
 plt.tight_layout()
 
 plt.show()
+
