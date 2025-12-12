@@ -49,7 +49,7 @@ parser = argparse.ArgumentParser(description="CLI")
 
 parser.add_argument("--training", action="store_true", help="Enable training mode")
 parser.add_argument("--dataset",  type=int, choices=range(1,4), default=1)
-parser.add_argument("--agent",  type=int, choices=range(1,6), default=1)
+parser.add_argument("--agent",  type=int, choices=range(1,7), default=1)
 parser.add_argument("--test",  type=int, choices=range(1,4), default=1)
 
 args = parser.parse_args()
@@ -111,6 +111,7 @@ else:
         print(f"Start of episode {episode+1}")
         power_cons = np.zeros(12, dtype=np.float32)         # Power consumption over time
         sla_violations = np.zeros(12, dtype=int)            # SLA violations over time
+        sla_severity = np.zeros(12, dtype=int)              # Extra delay of SLA violations over time
         cpu_du = np.zeros(shape=(n_DUs, 12), dtype=int)     # CPU usage per DU over time
         cpu_cu = np.zeros(shape=(n_CUs, 12), dtype=int)     # CPU usage per CU over time
         active = np.zeros(12, dtype=int)                    # Active slices over time
@@ -159,6 +160,7 @@ else:
                         print(f"SLA violation! Delay: {max_delay} ms, SLA: {round(unnormalized_state[-3])} ms")
                         for t in range(round(unnormalized_state[-1]), round(unnormalized_state[-1]) + round(unnormalized_state[-2])):
                             sla_violations[t] += 1
+                            sla_severity[t] += max_delay - round(unnormalized_state[-3])
 
             state_, reward, done, info = env.step(action)
             if isinstance(reward, list):
@@ -195,7 +197,8 @@ else:
                 "Active": active,
                 "Power_Consumption": power_cons,
                 "Max_Load_Imbalance": max_load - min_load,
-                "SLA_Violations": sla_violations
+                "SLA_Violations": sla_violations,
+                "SLA_Severity": sla_severity
         }
 
         df = pd.DataFrame(data)
