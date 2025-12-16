@@ -84,6 +84,4 @@ plt.title("Average SLA Severity Over Time")
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
-
 plt.show()
-
