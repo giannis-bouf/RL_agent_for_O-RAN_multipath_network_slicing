@@ -27,9 +27,14 @@ class NetworkEnv(gym.Env):
         self.rho_lambda = [np.clip(np.random.normal(self.llambda[idx], 0.1), 0.0, 1.0) for idx in range(self.n_CUs)]
 
         self.CPU_per_instance = [0] + [1]*(Fs_max-1)    # Number of CPU demand per instance per VNF
-        # FH/BH latency per link (ιδια προς το παρον)
-        self.FH_latency = [int(np.random.uniform(3, 8)) for _ in range(self.n_DUs)]
-        self.BH_latency = np.random.uniform(12, 40, size=(self.n_DUs, self.n_CUs)).astype(int)
+        # FH/BH latency per link (ms)
+        # Each entry corresponds to the fronthaul delay between a DU and the RU
+        self.FH_latency = [4, 5, 6, 7, 5, 8, 7, 6]
+        # Each row represents a DU and each column corresponds to a CU
+        # Therefore, the matrix has dimensions n_DUs × n_CUs, capturing backhaul delays
+        # between every DU–CU pair
+        self.BH_latency = np.array([ [12, 26], [28, 14], [16, 30], [32, 16],
+                                     [20, 34], [36, 22], [24, 38], [26, 40] ])
         self.Gamma = Gamma                              # "Severity of delay violations" constant
 
         # Reward function coefficients
@@ -468,3 +473,4 @@ class NetworkEnv(gym.Env):
             mask[action] = self.is_action_valid(action)
 
         return mask
+
