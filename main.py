@@ -66,7 +66,7 @@ else:
 def mask_function(env):
     return env.invalid_action_masking()
 
-env = NetworkEnv(training_mode=training, dataset=test)
+env = NetworkEnv(training_mode=training, dataset=dataset)
 env = ActionMasker(env, mask_function)
 env = DummyVecEnv([lambda: env])
 
@@ -236,4 +236,5 @@ else:
 
     avg_test_score = np.mean(test_score_history)
     print(f'Average test score over {test_episodes} episodes: {avg_test_score:.1f}')
+
 
