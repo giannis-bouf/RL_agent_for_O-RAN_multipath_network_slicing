@@ -19,9 +19,9 @@ def load_results(dataset, agent_id):
     
     return  Df.groupby("Time").mean()
 
-agentA = A
-agentB = B
-dataset = X
+agentA = #index of agentA
+agentB = #index of agentB
+dataset = #index of dataset
 
 A = load_results(dataset, agentA)
 B = load_results(dataset, agentB)
@@ -84,3 +84,4 @@ plt.legend()
 plt.grid(True)
 plt.tight_layout()
 plt.show()
+
