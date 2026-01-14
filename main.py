@@ -49,7 +49,7 @@ parser = argparse.ArgumentParser(description="CLI")
 
 parser.add_argument("--training", action="store_true", help="Enable training mode")
 parser.add_argument("--dataset",  type=int, choices=range(1,4), default=1)
-parser.add_argument("--agent",  type=int, choices=range(1,7), default=1)
+parser.add_argument("--agent",  type=int, choices=range(1,8), default=1)
 parser.add_argument("--test",  type=int, choices=range(1,4), default=1)
 
 args = parser.parse_args()
@@ -157,7 +157,6 @@ else:
                         max_delay = np.maximum(max_delay, delay)
                     # If SLA violation occurs, record it across the slice's lifetime
                     if max_delay > round(unnormalized_state[-3]):
-                        print(f"SLA violation! Delay: {max_delay} ms, SLA: {round(unnormalized_state[-3])} ms")
                         for t in range(round(unnormalized_state[-1]), round(unnormalized_state[-1]) + round(unnormalized_state[-2])):
                             sla_violations[t] += 1
                             sla_severity[t] += max_delay - round(unnormalized_state[-3])
@@ -236,5 +235,3 @@ else:
 
     avg_test_score = np.mean(test_score_history)
     print(f'Average test score over {test_episodes} episodes: {avg_test_score:.1f}')
-
-
