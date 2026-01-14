@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 
 def load_results(dataset, agent_id):
     # Load all case_*.csv files from an agent and return averaged metrics
-
     dir = f"results/train{dataset}/agent{agent_id}"
     dfs = []
     for test in range(1,4):
@@ -20,9 +19,9 @@ def load_results(dataset, agent_id):
     
     return  Df.groupby("Time").mean()
 
-agentA = 3
-agentB = 5
-dataset = 2
+agentA = A
+agentB = B
+dataset = X
 
 A = load_results(dataset, agentA)
 B = load_results(dataset, agentB)
