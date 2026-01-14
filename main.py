@@ -49,7 +49,7 @@ parser = argparse.ArgumentParser(description="CLI")
 
 parser.add_argument("--training", action="store_true", help="Enable training mode")
 parser.add_argument("--dataset",  type=int, choices=range(1,4), default=1)
-parser.add_argument("--agent",  type=int, choices=range(1,8), default=1)
+parser.add_argument("--agent",  type=int, choices=range(1,7), default=1)
 parser.add_argument("--test",  type=int, choices=range(1,4), default=1)
 
 args = parser.parse_args()
@@ -235,4 +235,5 @@ else:
 
     avg_test_score = np.mean(test_score_history)
     print(f'Average test score over {test_episodes} episodes: {avg_test_score:.1f}')
+
 
