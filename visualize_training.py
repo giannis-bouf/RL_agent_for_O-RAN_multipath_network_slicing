@@ -9,7 +9,7 @@ def moving_average(data, window_size):
 
 score_history = []
 for i in range(1, 4):
-    with open(f"results/train1/agent{i}/score_history.pkl", "rb") as f:
+    with open(f"results/train{i}/agentX/score_history.pkl", "rb") as f:
         sh = pickle.load(f)
         print(len(sh))
         score_history.append(moving_average(sh, window_size=1000))
@@ -18,13 +18,10 @@ max_list = []
 min_list = []
 main_list = []
 
-for i in range(640):
-    #min_list.append(min(score_history[0][i], score_history[1][i], score_history[3][i], score_history[4][i]))
-    #max_list.append(max(score_history[0][i], score_history[1][i], score_history[2][i], score_history[3][i], score_history[4][i]))
-    #main_list.append((score_history[0][i] + score_history[1][i] + score_history[2][i] + score_history[3][i] + score_history[4][i])/5)
+for i in range(626):
     min_list.append(min(score_history[0][i], score_history[1][i], score_history[2][i]))
     max_list.append(max(score_history[0][i], score_history[1][i], score_history[2][i]))
-    main_list.append((score_history[0][i] + score_history[1][i]+ score_history[2][i])/3)
+    main_list.append((score_history[0][i] + score_history[1][i] + score_history[2][i]) / 3)
 
 main_array = np.array(main_list)
 min_array = np.array(min_list)
@@ -42,10 +39,8 @@ plt.fill_between(x, min_array, max_array, color='blue', alpha=0.2)
 # Labels and styling
 plt.xlabel('Episode', fontsize=12, fontweight='bold')
 plt.ylabel('Cumulative Reward', fontsize=12, fontweight='bold')
-#plt.xticks(np.arange(7) * 5000, fontweight='bold')
 plt.xticks(np.arange(7) * 100, fontweight='bold')
 plt.yticks(fontweight='bold')
-#plt.legend(loc='best', frameon=True)
 plt.grid(True)
 plt.tight_layout()
 plt.show()
