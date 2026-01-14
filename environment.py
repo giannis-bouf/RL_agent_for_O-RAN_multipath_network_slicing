@@ -9,7 +9,7 @@ class NetworkEnv(gym.Env):
 
     def __init__(self, Fs_max=4, n_DUs=8, n_CUs=2, c_DU=16, c_CU=64, C_max=2,
                  P_cpu=3, P_start=16, theta_idle=0.4, Gamma=12,
-                 H=12, Dt=1, request_rate=1, training_mode = True, dataset = 1):
+                 H=12, training_mode = True, dataset = 1):
         self.horizon_length = H     # Horizon equal to total number of time slots
 
         self.c_DU = c_DU            # DU computational capacity
@@ -29,7 +29,7 @@ class NetworkEnv(gym.Env):
         self.CPU_per_instance = [0] + [1]*(Fs_max-1)    # Number of CPU demand per instance per VNF
         # FH/BH latency per link (ms)
         # Each entry corresponds to the fronthaul delay between a DU and the RU
-        self.FH_latency = [4, 5, 6, 7, 5, 8, 7, 6]
+        self.FH_latency = [4, 5, 6, 5, 5, 6, 4, 6]
         # Each row represents a DU and each column corresponds to a CU
         # Therefore, the matrix has dimensions n_DUs × n_CUs, capturing backhaul delays
         # between every DU–CU pair
@@ -38,7 +38,11 @@ class NetworkEnv(gym.Env):
         self.Gamma = Gamma                              # "Severity of delay violations" constant
 
         # Reward function coefficients
-        self.reward_coeffs = [1,0,0]
+        # self.reward_coeffs = [0,1,0]      # single
+        # self.reward_coeffs = [0,50,1]     # load balance & delay
+        # self.reward_coeffs = [1,0,120]    # power consumption & delay
+        # self.reward_coeffs = [1,650,130]  # total 
+        self.reward_coeffs = [0,1,0]
         
         if training_mode:
             self.dataset_file = f"datasets/dataset{dataset}/historic_data.pkl"
@@ -90,7 +94,7 @@ class NetworkEnv(gym.Env):
         """
         State s_k = <AC_k=[AC_1(k), ..., AC_{|E|+|C|}(k)],
                      P_k = [P_1(k)_DU, P_1(k)_CU, ..., P_C_max(k)_DU, P_C_max(k)_CU]
-                     SI_k=[F_s, i_k, C_{i,s}(t_k), delta_s, ht_s], 
+                     SI_k=[F_s, i_k, C_{i,s}, delta_s, ht_s], 
                      t_k>
 
         Observation:
@@ -103,7 +107,7 @@ class NetworkEnv(gym.Env):
             - SI_k
               3 <= F_s <= Fs_max, size: 1
               1 <= i_k <= Fs_max, size: 1
-              1 <= C_{i,s}(t_k) <= C_max, size: 1
+              1 <= C_{i,s} <= C_max, size: 1
               25 <= delta_s <= 100, size: 1
               0 <= ht_s <= H/2, size: 1 
               0 <= t_k <= H-1, size: 1
@@ -128,7 +132,7 @@ class NetworkEnv(gym.Env):
         lower_bds += [1] #i_k
         upper_bds += [self.Fs_max]
 
-        lower_bds += [1] #C_{i,s}(t_k)
+        lower_bds += [1] #C_{i,s}
         upper_bds += [self.C_max]
 
         lower_bds += [25] #delta_s
@@ -203,22 +207,16 @@ class NetworkEnv(gym.Env):
         return self.get_state(), {}
     
     def get_state(self):
-        t_s = self.current_slice[1]
-
-        if self.timestep - t_s > 0:
-            time_idx = self.timestep - t_s
-        else:
-            time_idx = 0
         state = np.concatenate([
             self.DU_av_capacity[self.timestep].flatten(),
             self.CU_av_capacity[self.timestep].flatten(),
             self.assigned_paths,
-            np.array([self.current_slice[0]]),                                      # F_s
-            np.array([self.vnf_idx]),                                               # i_k
-            np.array([self.current_slice[4][self.vnf_idx][time_idx]]),              # C_{i,s}(t_k)
-            np.array([self.current_slice[3]]),                                      # delta_s
-            np.array([self.current_slice[2]]),                                      # ht_s
-            np.array([self.timestep])                                               # t_k
+            np.array([self.current_slice[0]]),                  # F_s
+            np.array([self.vnf_idx]),                           # i_k
+            np.array([self.current_slice[4][self.vnf_idx]]),    # C_{i,s}
+            np.array([self.current_slice[3]]),                  # delta_s
+            np.array([self.current_slice[2]]),                  # ht_s
+            np.array([self.timestep])                           # t_k
         ])
         
         return state
@@ -252,18 +250,8 @@ class NetworkEnv(gym.Env):
         return X
 
     def step(self, action):
-        current_state =  self.get_state()
-        #self.print_state_readable(current_state)
         reward = float('-inf')
 
-        # if action == 0:
-        #    if (self.timestep < self.horizon_length - 1) and \
-        #       (self.timestep < self.current_slice[1] + self.current_slice[2]):
-        #        if self.current_scenario[self.timestep + 1] == None:
-        #            self.current_scenario[self.timestep + 1] = [self.current_slice.copy()]
-        #        else:
-        #            self.current_scenario[self.timestep + 1].append(self.current_slice.copy())
-        #else:
         if action != 0:
             reward = 0
 
@@ -292,7 +280,6 @@ class NetworkEnv(gym.Env):
                     # If cold start was considered and node is active now: apply cold start overhead
                     if self.DU_phi[self.timestep + t][du][0] > 0 and cold_start:
                         self.DU_phi[self.timestep + t][du][0] += self.P_start
-                        #print(f"DU {du+1} cold start applied!")
 
                     # u^i_{node}(t) = 1 - (AC_i(t)/c_i)
                     self.DU_utilization[self.timestep + t][du][0] = 1 - (self.DU_av_capacity[self.timestep + t][du][0] / self.c_DU)
@@ -312,7 +299,6 @@ class NetworkEnv(gym.Env):
 
                     if self.CU_phi[self.timestep + t][cu][0] > 0 and cold_start:
                         self.CU_phi[self.timestep + t][cu][0] += self.P_start
-                        #print(f"CU {cu+1} cold start applied!")
                     
                     self.CU_utilization[self.timestep + t][cu][0] = 1 - (self.CU_av_capacity[self.timestep + t][cu][0] / self.c_CU)
                     max_util = np.maximum(max_util, self.CU_utilization[self.timestep + t][cu][0])
@@ -334,18 +320,15 @@ class NetworkEnv(gym.Env):
                 for p in range(self.C_max):
                     delay = 0
                     assigned_du = self.assigned_paths[2*p]
-                    #print(assigned_du)
                     if assigned_du > 0:
                         delay += self.FH_latency[assigned_du-1]
                         assigned_cu = X_k[p,0]-self.n_DUs
                         if assigned_cu > 0:
                             delay += self.BH_latency[assigned_du-1, assigned_cu-1]
                     max_delay = np.maximum(max_delay, delay)
-                #print(f"Max delay for slice at time {self.timestep}: {max_delay} ms")
                 # If SLA violation occurs, apply proportionate penalty
                 if max_delay > self.current_slice[3]:
                     reward -= self.reward_coeffs[2] * (max_delay - self.current_slice[3]) * self.Gamma
-                    #print(f"SLA violation! Delay: {max_delay} ms, SLA: {self.current_slice[3]} ms")
 
         self.scenario_reward += reward
         terminated = False
@@ -379,7 +362,6 @@ class NetworkEnv(gym.Env):
                 self.vnf_idx = 1
 
         next_state = self.get_state()
-        #self.print_state_readable(next_state)
 
         return next_state, reward, terminated, False, self.get_info()
     
@@ -456,13 +438,10 @@ class NetworkEnv(gym.Env):
         # If the minimum requirement of replicas count is not met or
         # if the allocated replicas exceed the maximum number of replicas per VNF
         # -> Invalid action
-        required_replicas = self.current_slice[4][self.vnf_idx][self.timestep - self.current_slice[1]]
+        required_replicas = self.current_slice[4][self.vnf_idx]
         deployed_replicas = sum(replicas_per_node)
         if self.C_max < deployed_replicas or required_replicas > deployed_replicas:
             return False
-        
-        #print(f"\nValid action: {action}")
-        #print("X_k =", X_k)
 
         return True
 
@@ -473,4 +452,3 @@ class NetworkEnv(gym.Env):
             mask[action] = self.is_action_valid(action)
 
         return mask
-
