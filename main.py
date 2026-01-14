@@ -157,7 +157,6 @@ else:
                         max_delay = np.maximum(max_delay, delay)
                     # If SLA violation occurs, record it across the slice's lifetime
                     if max_delay > round(unnormalized_state[-3]):
-                        print(f"SLA violation! Delay: {max_delay} ms, SLA: {round(unnormalized_state[-3])} ms")
                         for t in range(round(unnormalized_state[-1]), round(unnormalized_state[-1]) + round(unnormalized_state[-2])):
                             sla_violations[t] += 1
                             sla_severity[t] += max_delay - round(unnormalized_state[-3])
@@ -236,3 +235,4 @@ else:
 
     avg_test_score = np.mean(test_score_history)
     print(f'Average test score over {test_episodes} episodes: {avg_test_score:.1f}')
+
