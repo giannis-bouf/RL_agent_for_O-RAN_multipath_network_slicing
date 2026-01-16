@@ -12,7 +12,7 @@ import pandas as pd
 import os
 
 C_max = 2; n_DUs = 8; n_CUs = 2; Fs_max = 4; du_capacity = 16; cu_capacity = 64
-P_cpu=3; P_start=16; theta_idle=0.4
+P_cpu=1; P_start=16; theta_idle=0.4
 
 def decode_action(action_idx):
         """
@@ -235,5 +235,6 @@ else:
 
     avg_test_score = np.mean(test_score_history)
     print(f'Average test score over {test_episodes} episodes: {avg_test_score:.1f}')
+
 
 
