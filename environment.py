@@ -8,7 +8,7 @@ import copy
 class NetworkEnv(gym.Env):
 
     def __init__(self, Fs_max=4, n_DUs=8, n_CUs=2, c_DU=16, c_CU=64, C_max=2,
-                 P_cpu=3, P_start=16, theta_idle=0.4, Gamma=12,
+                 P_cpu=1, P_start=16, theta_idle=0.4, Gamma=12,
                  H=12, training_mode = True, dataset = 1):
         self.horizon_length = H     # Horizon equal to total number of time slots
 
@@ -452,3 +452,4 @@ class NetworkEnv(gym.Env):
             mask[action] = self.is_action_valid(action)
 
         return mask
+
