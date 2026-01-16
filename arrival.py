@@ -59,9 +59,21 @@ class SliceReqGenerator:
                 self.active[t] = self.active[t] + 1
 
             F_s = np.random.randint(3,self.Fs_max + 1) # SFC's size
-            C_s = [1] # Computational demand for each VNF (demand for VNF 0 is always 1)
+            C_s = [np.int64(1)] # Computational demand for each VNF (demand for VNF 0 is always 1)
+            # The distribution of replica count for the following VNFs 
+            # is designed to favor lower demands greater than 1, as an exponential decay 
+            # is applied to values from 2 to C_max
+            if self.C_max > 1:
+                p1 = 1 / (self.C_max + 2)
+                remaining_indices = np.arange(self.C_max - 1)
+                exp_weights = np.exp(-remaining_indices / 3.0) 
+                remaining_p = 1 - p1
+                exp_weights_normalized = (exp_weights / exp_weights.sum()) * remaining_p
+                replica_p = np.concatenate(([p1], exp_weights_normalized))
+            else:
+                replica_p = np.array([1.0])
             for _ in range(1, F_s):
-                C_s.append(np.random.choice(range(1, C_max+1), p=[0.25,0.75]))
+                C_s.append(np.random.choice(range(1, self.C_max+1), p=replica_p))
 
             self.arriving_reqs.append([F_s, t_s, ht_s, delta_s, C_s])
 
@@ -96,3 +108,4 @@ if __name__ == '__main__':
        pickle.dump(test_episodes, f)
 
     load()
+
