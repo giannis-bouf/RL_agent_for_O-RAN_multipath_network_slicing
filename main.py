@@ -11,6 +11,24 @@ from arrival import SliceReqGenerator
 import pandas as pd
 import os
 
+import torch
+from sb3_contrib.common.maskable.distributions import MaskableCategoricalDistribution
+# Patch the apply_masking method to ensure proper masking behavior
+def patched_apply_masking(self, masks: torch.Tensor) -> None:
+    super(MaskableCategoricalDistribution, self).apply_masking(masks)
+    probs = self.distribution.probs
+    
+    if not isinstance(masks, torch.Tensor):
+        masks_tensor = torch.as_tensor(masks, device=probs.device)
+    else:
+        masks_tensor = masks.to(probs.device)
+    
+    probs = probs * masks_tensor
+    sum_probs = probs.sum(dim=-1, keepdim=True)
+    self.distribution.probs = probs / sum_probs
+
+MaskableCategoricalDistribution.apply_masking = patched_apply_masking
+
 C_max = 2; n_DUs = 8; n_CUs = 2; Fs_max = 4; du_capacity = 16; cu_capacity = 64
 P_cpu=1; P_start=16; theta_idle=0.4
 
@@ -77,7 +95,7 @@ if training:
     env = VecNormalize(env, norm_obs=True, norm_reward=True, clip_obs=10.0)
     model = MaskablePPO("MlpPolicy", env, gamma=0.99, verbose=2, tensorboard_log=None, seed=12)
 
-    model.learn(total_timesteps=100_000, progress_bar=True)
+    model.learn(total_timesteps=500_000, progress_bar=True)
     model.save(save_dir + "agent.zip")
     env.save(save_dir + "vec_normalize.pkl")
 
@@ -235,6 +253,7 @@ else:
 
     avg_test_score = np.mean(test_score_history)
     print(f'Average test score over {test_episodes} episodes: {avg_test_score:.1f}')
+
 
 
 
