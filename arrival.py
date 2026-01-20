@@ -77,8 +77,8 @@ class SliceReqGenerator:
 
             self.arriving_reqs.append([F_s, t_s, ht_s, delta_s, C_s])
 
-def load():
-    with open('datasets/datasetX/historic_data.pkl', 'rb') as f:
+def load(dataset):
+    with open(f'datasets/dataset{dataset}/historic_data.pkl', 'rb') as f:
         loaded_episodes = pickle.load(f)
         print(f"Loaded {len(loaded_episodes)} episodes.")
         print(loaded_episodes[0].arriving_reqs)  # Print the first episode for verification
@@ -89,6 +89,7 @@ if __name__ == '__main__':
     tests = 1
     Fs_max = 4
     C_max = 2
+    dataset = X
     np.random.seed(443)
 
     # Generate 500 episodes
@@ -97,15 +98,16 @@ if __name__ == '__main__':
         all_episodes.append(episode)
 
     # Save episodes to pickle file
-    with open('datasets/datasetX/historic_data.pkl', 'wb') as f:
+    with open(f'datasets/dataset{dataset}/historic_data.pkl', 'wb') as f:
         pickle.dump(all_episodes, f)
 
     for _ in range(tests):
         episode = SliceReqGenerator(Fs_max, C_max)
         test_episodes.append(episode)
 
-    with open('datasets/datasetX/test_data.pkl', 'wb') as f:
+    with open(f'datasets/dataset{dataset}/test_data.pkl', 'wb') as f:
        pickle.dump(test_episodes, f)
 
-    load()
+    load(dataset)
+
 
