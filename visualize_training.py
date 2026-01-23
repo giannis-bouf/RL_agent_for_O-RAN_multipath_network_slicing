@@ -7,9 +7,10 @@ import pickle
 def moving_average(data, window_size):
     return np.convolve(data, np.ones(window_size)/window_size, mode='valid')
 
+agent_id = X
 score_history = []
 for i in range(1, 4):
-    with open(f"results/train{i}/agentX/score_history.pkl", "rb") as f:
+    with open(f"results/train{i}/agent{agent_id}/score_history.pkl", "rb") as f:
         sh = pickle.load(f)
         print(len(sh))
         score_history.append(moving_average(sh, window_size=1000))
@@ -44,3 +45,4 @@ plt.yticks(fontweight='bold')
 plt.grid(True)
 plt.tight_layout()
 plt.show()
+
