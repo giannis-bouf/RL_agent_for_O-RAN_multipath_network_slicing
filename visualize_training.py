@@ -9,17 +9,19 @@ def moving_average(data, window_size):
 
 agent_id = X
 score_history = []
+min_length = float('inf')
 for i in range(1, 4):
     with open(f"results/train{i}/agent{agent_id}/score_history.pkl", "rb") as f:
         sh = pickle.load(f)
-        print(len(sh))
-        score_history.append(moving_average(sh, window_size=1000))
-
+        tmp = moving_average(sh, window_size=1000)
+        min_length = min(min_length, len(tmp))
+        score_history.append(tmp)
+        
 max_list = []
 min_list = []
 main_list = []
 
-for i in range(626):
+for i in range(min_length):
     min_list.append(min(score_history[0][i], score_history[1][i], score_history[2][i]))
     max_list.append(max(score_history[0][i], score_history[1][i], score_history[2][i]))
     main_list.append((score_history[0][i] + score_history[1][i] + score_history[2][i]) / 3)
@@ -40,9 +42,10 @@ plt.fill_between(x, min_array, max_array, color='blue', alpha=0.2)
 # Labels and styling
 plt.xlabel('Episode', fontsize=12, fontweight='bold')
 plt.ylabel('Cumulative Reward', fontsize=12, fontweight='bold')
-plt.xticks(np.arange(7) * 100, fontweight='bold')
+plt.xticks(np.arange((min_length // 1000) + 1) * 1000, fontweight='bold')
 plt.yticks(fontweight='bold')
 plt.grid(True)
 plt.tight_layout()
 plt.show()
+
 
